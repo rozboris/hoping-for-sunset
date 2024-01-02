@@ -1,27 +1,44 @@
-const getCoords = async () => {
-    return {lon: -122.3016674, lat: 47.7593955};
+const getCoords = async (useCache = true) => {
+  if (useCache) {
+    const storedLocation = localStorage.getItem("location");
+    if (storedLocation) {
+      return JSON.parse(storedLocation);
+    }
+  }
   const pos = await new Promise((resolve, reject) => {
     navigator.geolocation.getCurrentPosition(resolve, reject);
   });
-  return {
-    lon: pos.coords.longitude,
+  const latlon = {
     lat: pos.coords.latitude,
+    lon: pos.coords.longitude
   };
+  localStorage.setItem("location", JSON.stringify(latlon))
+  return latlon;
 };
 
 function getSunset(date, lat, lon) {
-    const sunset = SunCalc.getTimes(date, lat, lon).sunset;
-    return moment(sunset).format('LT');
+  const sunset = SunCalc.getTimes(date, lat, lon).sunset;
+  return moment(sunset).format('LT');
 }
-
 
 async function main() {
   const container = document.querySelectorAll('.container')[0];
+  print(`<h2>⏳ Getting location...</h2>`);
   const coords = await getCoords();
+  container.replaceChildren();
 
   const today = moment();
 
-  print(`<h1>Sunset ☀️ </h1>`);
+  const title = $(`<h1 title='${JSON.stringify(coords)}'>Sunset ☀️ </h1>`);
+  container.append(title);
+
+  const refreshLocationLink = $('<a href="#" style="font-size: 0.4em;font-weight: 400; vertical-align: top;">refresh location</a>');
+  refreshLocationLink.addEventListener('click', async () => {
+    refreshLocationLink.textContent += ' ⏳'
+    await getCoords(/*useCache = */false);
+    location.reload();
+  });
+  title.append(refreshLocationLink);
 
   [
     [today, 'Today'],
@@ -37,8 +54,7 @@ async function main() {
     [calculateClosestSolstice(today), 'On closest solstice'],
     [calculateClosestSolstice(calculateClosestSolstice(today)), 'On next solstice']
   ].forEach(([date, description]) => {
-    const text = date ? `<h2>${description} (${date.format('MM/DD')}): ${getSunset(date, coords.lat, coords.lon)}</h2>`
-      : description;
+    const text = date ? `<h2>${description} (${date.format('MM/DD')}): ${getSunset(date, coords.lat, coords.lon)}</h2>` : description;
     print(text);
   });
 
@@ -58,6 +74,14 @@ function calculateClosestSolstice(today) {
   if (winter > today) return winter;
 
   return summer.add(1, 'year'); // summer next year
+}
+
+// from https://youmightnotneedjquery.com/#create_elements
+function $(html, onlyFirst = true) {
+  const template = document.createElement('template');
+  template.innerHTML = html.trim();
+  const children = template.content.children;
+  return onlyFirst ? children[0] : children;
 }
 
 /*
